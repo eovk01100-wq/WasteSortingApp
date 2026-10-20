@@ -1,0 +1,31 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+/local.properties
+
+# ?? ?? ??
+.kotlin/
+.idea/
+*.log
+
+# 설치 파일과 서명 키는 절대 올리지 않음
+*.apk
+*.aab
+*.jks
+*.keystore
+*.pem
+*.p12
+secrets.properties

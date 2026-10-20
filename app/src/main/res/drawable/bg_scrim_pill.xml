@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 카메라 위 앱 이름 알약 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/scrim_strong" />
+    <corners android:radius="22dp" />
+</shape>

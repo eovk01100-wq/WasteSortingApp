@@ -1,0 +1,20 @@
+Copyright (c) 2026 eovk01100-wq. All rights reserved.
+
+이 저장소의 소스 코드와 문서, 스크린샷은 포트폴리오 열람 목적으로 공개합니다.
+저작권자의 사전 서면 허락 없이 복제, 수정, 배포, 상업적 이용을 할 수 없습니다.
+(GitHub 서비스 약관에 따라 GitHub 안에서 열람하고 포크하는 것은 허용됩니다.)
+
+The source code, documentation, and screenshots in this repository are made
+public for portfolio viewing only. No permission is granted to copy, modify,
+distribute, or use them commercially without prior written consent from the
+copyright holder. (Viewing and forking within GitHub are permitted under the
+GitHub Terms of Service.)
+
+----------------------------------------------------------------------
+예외: 학습 데이터와 모델 파일 / Exception: training data and model file
+
+- 학습 데이터: 셀렉트스타 생활폐기물 객체인식 데이터셋 (저작자: 셀렉트스타)
+  https://open.selectstar.ai/ko/dingbro — CC BY-SA 3.0
+- 모델 파일 app/src/main/assets/waste_yolo11n_fp32.tflite 는 위 데이터셋으로
+  학습한 결과물로, CC BY-SA 3.0 조건을 따릅니다.
+  https://creativecommons.org/licenses/by-sa/3.0/

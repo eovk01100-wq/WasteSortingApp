@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 내보낼 ZIP만 다른 앱에 공유 -->
+    <cache-path name="export" path="export/" />
+</paths>

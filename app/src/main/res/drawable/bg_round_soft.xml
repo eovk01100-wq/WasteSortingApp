@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 결과 카드 닫기 버튼 -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#1F14201A">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="@color/brand_surface_soft" />
+        </shape>
+    </item>
+</ripple>

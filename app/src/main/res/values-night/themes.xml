@@ -1,0 +1,25 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- 다크 모드에서도 낮 테마와 같은 모양을 쓴다 (values/themes.xml 참고) -->
+    <style name="Base.Theme.WasteSorting" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/brand_green</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorPrimaryContainer">@color/brand_green_soft</item>
+        <item name="colorOnPrimaryContainer">@color/brand_green_text</item>
+        <item name="colorSecondary">@color/brand_green</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <item name="colorSecondaryContainer">@color/brand_surface_soft</item>
+        <item name="colorOnSecondaryContainer">@color/brand_ink</item>
+        <item name="colorTertiary">@color/brand_green_dark</item>
+        <item name="android:colorBackground">@color/white</item>
+        <item name="colorSurface">@color/white</item>
+        <item name="colorOnSurface">@color/brand_ink</item>
+        <item name="colorOnSurfaceVariant">@color/brand_gray</item>
+        <item name="colorOutline">@color/brand_outline</item>
+        <item name="colorOutlineVariant">@color/brand_line</item>
+        <item name="colorSurfaceContainerLowest">@color/white</item>
+        <item name="colorSurfaceContainerLow">@color/white</item>
+        <item name="colorSurfaceContainer">@color/white</item>
+        <item name="colorSurfaceContainerHigh">@color/white</item>
+        <item name="colorSurfaceContainerHighest">@color/brand_surface_soft</item>
+    </style>
+</resources>

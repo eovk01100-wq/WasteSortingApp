@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <!-- 버림가이드 디자인 색 -->
+    <color name="brand_green">#17804F</color>        <!-- 포인트 (버튼, 단계 번호) -->
+    <color name="brand_green_dark">#11643D</color>
+    <color name="brand_green_soft">#EAF6EF</color>   <!-- 성공 메시지 바탕 -->
+    <color name="brand_green_text">#1B5E3A</color>
+    <color name="brand_ink">#14201A</color>          <!-- 본문 글자 -->
+    <color name="brand_gray">#4B5A52</color>         <!-- 보조 글자 -->
+    <color name="brand_gray_light">#5B6B62</color>
+    <color name="brand_surface_soft">#EFF3F1</color> <!-- 연한 버튼 바탕 -->
+    <color name="brand_line">#E6ECE9</color>
+    <color name="brand_outline">#CFD8D3</color>
+    <color name="brand_caution_bg">#FFF1E3</color>   <!-- 주의 상자 -->
+    <color name="brand_caution_text">#8A3B00</color>
+    <color name="brand_star_bg">#FFF6DD</color>
+    <color name="brand_star">#A86A00</color>
+    <color name="scrim_strong">#99101814</color>     <!-- 카메라 위 반투명 버튼 (60%) -->
+    <color name="scrim_light">#73101814</color>      <!-- 카메라 위 상태 표시 (45%) -->
+    <color name="icon_bg">#12352A</color>            <!-- 앱 아이콘 바탕 -->
+    <color name="icon_mint">#7FD8A6</color>
+</resources>
