@@ -1,140 +1,173 @@
 package com.jiwoo.wastesorting
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.Bitmap
-import android.util.Base64
 import com.google.gson.Gson
+import com.google.gson.annotations.SerializedName
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import retrofit2.HttpException
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.Multipart
 import retrofit2.http.POST
-import retrofit2.http.Path
+import retrofit2.http.Part
+import retrofit2.http.Query
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
-interface GeminiApi {
-    @POST("v1beta/models/{model}:generateContent")
-    suspend fun generate(
-        @Path("model") model: String,
-        @Header("x-goog-api-key") apiKey: String,
-        @Body body: GeminiRequest
-    ): GeminiResponse
+/** 버림가이드 서버 API (Gemini는 서버가 대신 호출한다. 앱에는 API 키가 없다) */
+interface ServerApi {
+    @POST("api/v1/auth/device")
+    suspend fun issueDeviceToken(): DeviceTokenResponse
+
+    @Multipart
+    @POST("api/v1/analyses")
+    suspend fun analyze(
+        @Header("Authorization") auth: String,
+        @Part image: MultipartBody.Part,
+        @Part("meta") meta: RequestBody
+    ): DisposalResponse
+
+    @GET("api/v1/search")
+    suspend fun search(
+        @Header("Authorization") auth: String,
+        @Query("q") query: String
+    ): DisposalResponse
 }
 
+data class DeviceTokenResponse(@SerializedName("token") val token: String?)
+
+/** 서버가 보낸 오류 { code, message }. message는 사용자에게 그대로 보여 줘도 되는 한국어 */
+class ServerException(val status: Int, val code: String?, message: String) : Exception(message)
+
+/**
+ * 분리배출 안내 요청 창구. 이름은 예전 그대로지만 이제 Gemini가 아니라 내 서버를 호출한다.
+ * MainActivity에서 쓰는 ask / askWhole / askText 모양은 바꾸지 않았다.
+ */
 object GeminiClient {
 
-    // 모델 이름이 바뀌어 404가 나면 여기만 고치면 돼요
-    private const val MODEL = "gemini-3.1-flash-lite"
+    private const val PREFS = "server_auth"
+    private const val KEY_TOKEN = "device_token"
 
     private val gson = Gson()
+    private var prefs: SharedPreferences? = null
 
-    private val api: GeminiApi = Retrofit.Builder()
-        .baseUrl("https://generativelanguage.googleapis.com/")
-        .client(
-            OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .callTimeout(20, TimeUnit.SECONDS)   // 요청 전체 상한
-                .build()
-        )
-        .addConverterFactory(GsonConverterFactory.create(gson))
-        .build()
-        .create(GeminiApi::class.java)
+    private val api: ServerApi by lazy {
+        val baseUrl = BuildConfig.SERVER_URL
+        require(baseUrl.isNotBlank()) { "local.properties에 SERVER_URL이 없어요" }
+        Retrofit.Builder()
+            .baseUrl(if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/")
+            .client(
+                OkHttpClient.Builder()
+                    .connectTimeout(15, TimeUnit.SECONDS)
+                    .readTimeout(45, TimeUnit.SECONDS)
+                    .callTimeout(50, TimeUnit.SECONDS)   // 서버가 Gemini 혼잡 시 재시도하는 시간까지 포함
+                    .build()
+            )
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+            .create(ServerApi::class.java)
+    }
 
-    private val classGuide = """
-        can=캔류, glass=유리병, pack=종이팩, paper=종이류,
-        pet=페트병, plastic=플라스틱류, vinyl=비닐류
-    """.trimIndent()
-
-    private val jsonFormat = """
-        반드시 아래 JSON 형식으로만 답해. JSON 밖에 다른 글은 쓰지 마.
-        {
-          "itemName": "물건 이름",
-          "category": "배출 분류 (예: 투명 페트병, 플라스틱, 캔류)",
-          "steps": ["배출 단계 1", "배출 단계 2"],
-          "caution": "주의사항, 없으면 빈 문자열",
-          "note": "추가 정보나 판단 이유, 없으면 빈 문자열",
-          "yoloClass": "can, glass, pack, paper, pet, plastic, vinyl 중 물체에 가장 맞는 하나. 어디에도 해당하지 않으면 other"
+    /** MainActivity.onCreate에서 한 번 호출 (토큰 저장 위치 준비) */
+    fun init(context: Context) {
+        if (prefs == null) {
+            prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         }
-    """.trimIndent()
+    }
 
-    /** 사진 + 탐지 라벨로 질의 */
+    /** 탐지 박스로 잘라낸 사진 + 탐지 라벨 */
     suspend fun ask(obj: DetectedObject, crop: Bitmap): DisposalResponse {
-        val prompt = """
-            너는 대한민국 생활폐기물 분리배출 안내 도우미야.
-            사진 속 물체를 보고 한국 기준 분리배출 방법을 알려 줘.
+        val meta = gson.toJson(
+            mapOf("mode" to "crop", "detectedLabel" to obj.label, "confidence" to obj.confidence)
+        )
+        return analyze(crop, meta)
+    }
 
-            객체 탐지 모델의 추정: ${obj.label} (신뢰도 ${(obj.confidence * 100).toInt()}%)
-            탐지 클래스 의미: $classGuide
-            이 추정은 틀릴 수 있어. 사진과 다르면 사진을 기준으로 판단해.
-        """.trimIndent() + "\n\n" + jsonFormat
+    /** 화면 전체 사진 (사용자가 직접 요청할 때만) */
+    suspend fun askWhole(frame: Bitmap): DisposalResponse =
+        analyze(frame, gson.toJson(mapOf("mode" to "whole")))
 
-        return request(
-            listOf(
-                GeminiPart(text = prompt),
-                GeminiPart(inlineData = InlineData("image/jpeg", toBase64Jpeg(crop)))
+    /** 사진 없이 물건 이름으로 검색 */
+    suspend fun askText(query: String): DisposalResponse =
+        withToken { auth -> api.search(auth, query) }
+
+    private suspend fun analyze(bitmap: Bitmap, metaJson: String): DisposalResponse {
+        val jpeg = toJpegBytes(bitmap)
+        return withToken { auth ->
+            // 다시 시도할 때 같은 본문을 쓸 수 있게 매번 새로 만든다
+            val image = MultipartBody.Part.createFormData(
+                "image", "photo.jpg", jpeg.toRequestBody("image/jpeg".toMediaType())
             )
-
-        )
+            val meta = metaJson.toRequestBody("text/plain; charset=utf-8".toMediaType())
+            api.analyze(auth, image, meta)
+        }
     }
 
-    /** 사진 없이 물건 이름으로 질의 */
-    suspend fun askText(query: String): DisposalResponse {
-        val prompt = """
-            너는 대한민국 생활폐기물 분리배출 안내 도우미야.
-            사용자가 사진 없이 물건 이름으로 검색했어: "$query"
-            한국 기준으로 이 물건의 분리배출 방법을 알려 줘.
-
-            - 물건 상태(오염, 여러 재질이 섞임 등)에 따라 방법이 달라지면 경우를 나눠서 설명해.
-            - 지역마다 다르거나 확실하지 않은 내용은 지어내지 말고 "거주 지역 지자체 안내를 확인하세요"라고 안내해.
-            - 물건 이름이 아니거나 무엇인지 알 수 없으면 itemName에 검색어를 그대로 쓰고 category를 "확인 필요"로 해.
-        """.trimIndent() + "\n\n" + jsonFormat
-
-        return request(listOf(GeminiPart(text = prompt)))
-    }
-    /** 탐지 박스 없이 화면 전체로 질의 (사용자가 직접 요청할 때만) */
-    suspend fun askWhole(frame: Bitmap): DisposalResponse {
-        val prompt = """
-            너는 대한민국 생활폐기물 분리배출 안내 도우미야.
-            사진은 사용자가 카메라로 비춘 화면 전체야. 물체 탐지 모델이 물건을 찾지 못했거나, 사용자가 화면 전체 분석을 요청했어.
-
-            - 화면 가운데에 있거나 가장 크게 보이는, 버리려는 것으로 보이는 물건 하나를 골라 한국 기준 분리배출 방법을 알려 줘.
-            - 사람, 손, 가구, 벽, 바닥, 책상처럼 버릴 물건이 아닌 것은 고르지 마.
-            - 버릴 물건을 찾을 수 없거나 무엇인지 확실하지 않으면 지어내지 마. 그때는 itemName을 "물체를 찾지 못했어요", category를 "확인 필요", yoloClass를 "other"로 하고, steps에 "버릴 물건을 화면 가운데에 크게 비춘 뒤 다시 시도하세요"를 넣어.
-            - 비슷하게 눈에 띄는 물건이 여러 개면 note에 어떤 물건을 골랐는지 적어.
-            - 지역마다 다르거나 확실하지 않은 내용은 "거주 지역 지자체 안내를 확인하세요"라고 안내해.
-        """.trimIndent() + "\n\n" + jsonFormat
-
-        return request(
-            listOf(
-                GeminiPart(text = prompt),
-                GeminiPart(inlineData = InlineData("image/jpeg", toBase64Jpeg(frame)))
-            )
-        )
+    /**
+     * 저장된 토큰으로 요청. 토큰이 없으면 먼저 받고,
+     * 서버가 401(토큰 무효)을 주면 토큰을 새로 받아 한 번만 다시 시도한다.
+     */
+    private suspend fun withToken(call: suspend (String) -> DisposalResponse): DisposalResponse {
+        try {
+            return GeminiParser.sanitize(call("Bearer " + token()))
+        } catch (e: HttpException) {
+            if (e.code() != 401) throw toServerException(e)
+            clearToken()
+        }
+        try {
+            return GeminiParser.sanitize(call("Bearer " + token()))
+        } catch (e: HttpException) {
+            throw toServerException(e)
+        }
     }
 
-    private suspend fun request(parts: List<GeminiPart>): DisposalResponse {
-        val key = BuildConfig.GEMINI_API_KEY
-        require(key.isNotBlank()) { "local.properties에 GEMINI_API_KEY가 없어요" }
-
-        val body = GeminiRequest(
-            contents = listOf(GeminiContent(parts = parts)),
-            generationConfig = GenerationConfig()
-        )
-        val response = api.generate(MODEL, key, body)
-        val text = response.candidates?.firstOrNull()
-            ?.content?.parts?.firstOrNull { it.text != null }?.text
-            ?: error("Gemini 응답이 비어 있어요")
-
-        // 혹시 ```json ... ``` 으로 감싸서 오면 벗겨내기
-        return GeminiParser.parse(text)
+    private suspend fun token(): String {
+        prefs?.getString(KEY_TOKEN, null)?.let { return it }
+        val issued = try {
+            api.issueDeviceToken().token
+        } catch (e: HttpException) {
+            throw toServerException(e)
+        }
+        require(!issued.isNullOrBlank()) { "서버에서 토큰을 받지 못했어요" }
+        prefs?.edit()?.putString(KEY_TOKEN, issued)?.apply()
+        return issued
     }
 
+    private fun clearToken() {
+        prefs?.edit()?.remove(KEY_TOKEN)?.apply()
+    }
 
+    /** 서버의 { code, message } 오류를 읽어 ServerException으로 바꾼다 */
+    private fun toServerException(e: HttpException): Exception {
+        val body = try {
+            e.response()?.errorBody()?.string()
+        } catch (_: Exception) {
+            null
+        }
+        val err = try {
+            gson.fromJson(body, ServerError::class.java)
+        } catch (_: Exception) {
+            null
+        }
+        val msg = err?.message
+        return if (msg.isNullOrBlank()) e else ServerException(e.code(), err?.code, msg)
+    }
 
-    // 긴 변을 768px 이하로 줄여서 전송량 줄이기
-    private fun toBase64Jpeg(src: Bitmap): String {
+    private data class ServerError(
+        @SerializedName("code") val code: String?,
+        @SerializedName("message") val message: String?
+    )
+
+    // 긴 변을 768px 이하로 줄여서 전송량 줄이기 (서버 제한 2MB보다 훨씬 작다)
+    private fun toJpegBytes(src: Bitmap): ByteArray {
         val maxSide = 768
         val scale = minOf(1f, maxSide.toFloat() / maxOf(src.width, src.height))
         val bmp = if (scale < 1f) {
@@ -145,6 +178,6 @@ object GeminiClient {
         val out = ByteArrayOutputStream()
         bmp.compress(Bitmap.CompressFormat.JPEG, 85, out)
         if (bmp !== src) bmp.recycle()   // 축소본은 전송용으로만 쓰고 바로 정리
-        return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+        return out.toByteArray()
     }
 }

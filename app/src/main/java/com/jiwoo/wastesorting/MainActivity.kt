@@ -142,6 +142,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        GeminiClient.init(this)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
@@ -826,12 +827,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun friendlyError(e: Exception): String = when (e) {
+        is ServerException -> e.message ?: "안내를 가져오지 못했어요. 다시 시도해 주세요."
         is HttpException -> when (e.code()) {
             400 -> "요청 형식에 문제가 있어요. 앱을 업데이트해 주세요."
-            401, 403 -> "API 키가 올바르지 않거나 권한이 없어요."
-            404 -> "AI 모델을 찾을 수 없어요. 모델 설정을 확인해 주세요."
+            401, 403 -> "앱 인증에 실패했어요. 앱을 다시 실행해 주세요."
+            404 -> "서버 주소를 찾을 수 없어요. 앱을 업데이트해 주세요."
             429 -> "잠시 사용량이 많아요. 조금 뒤에 다시 눌러 주세요."
-            in 500..599 -> "AI 서버에 일시적인 문제가 있어요. 잠시 후 다시 시도해 주세요."
+            in 500..599 -> "서버에 일시적인 문제가 있어요. 잠시 후 다시 시도해 주세요."
             else -> "안내를 가져오지 못했어요. (오류 ${e.code()})"
         }
         is java.net.UnknownHostException,
