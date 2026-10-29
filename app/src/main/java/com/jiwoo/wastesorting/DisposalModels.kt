@@ -14,7 +14,10 @@ data class DisposalResponse(
     @SerializedName("steps") val steps: List<String>?,
     @SerializedName("caution") val caution: String?,
     @SerializedName("note") val note: String?,
-    @SerializedName("yoloClass") val yoloClass: String? = null
+    @SerializedName("yoloClass") val yoloClass: String? = null,
+    // 서버가 붙여 주는 값 (오프라인 기본 안내에는 없음)
+    @SerializedName("analysisId") val analysisId: Long? = null,
+    @SerializedName("misdetection") val misdetection: Boolean? = null
 )
 
 // ---- Gemini REST API 요청/응답 ----

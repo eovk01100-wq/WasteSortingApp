@@ -44,6 +44,16 @@ interface ServerApi {
         @Query("q") query: String
     ): DisposalResponse
 
+    /** 오탐 원본 화면 + 박스 업로드 (사용자가 동의한 경우에만) */
+    @Multipart
+    @POST("api/v1/analyses/{id}/frame")
+    suspend fun uploadFrame(
+        @Header("Authorization") auth: String,
+        @Path("id") analysisId: Long,
+        @Part image: MultipartBody.Part,
+        @Part("meta") meta: RequestBody
+    ): FrameUploadResponse
+
     @POST("api/v1/auth/signup")
     suspend fun signup(
         @Header("Authorization") auth: String,
@@ -78,6 +88,8 @@ interface ServerApi {
 }
 
 data class DeviceTokenResponse(@SerializedName("token") val token: String?)
+
+data class FrameUploadResponse(@SerializedName("misdetectionId") val misdetectionId: Long?)
 
 data class AccountRequest(
     @SerializedName("email") val email: String,
@@ -189,6 +201,17 @@ object GeminiClient {
             val meta = metaJson.toRequestBody("text/plain; charset=utf-8".toMediaType())
             api.analyze(auth, image, meta)
         })
+    }
+
+    /** 오탐 원본 업로드. box = [중심x, 중심y, 너비, 높이] (0~1) */
+    suspend fun uploadFrame(analysisId: Long, jpeg: ByteArray, box: DoubleArray) {
+        val metaJson = gson.toJson(mapOf("box" to box.toList()))
+        withAuth { auth ->
+            val image = MultipartBody.Part.createFormData(
+                "image", "frame.jpg", jpeg.toRequestBody("image/jpeg".toMediaType())
+            )
+            api.uploadFrame(auth, analysisId, image, metaJson.toRequestBody("text/plain; charset=utf-8".toMediaType()))
+        }
     }
 
     // ---------------- 계정 (선택 로그인) ----------------

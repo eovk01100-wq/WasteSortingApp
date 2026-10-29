@@ -552,7 +552,7 @@ class MainActivity : AppCompatActivity() {
                 if (myReq != requestSeq) return@launch   // 취소된 요청은 아무것도 저장하지 않음
 
                 if (!det.uncertain) resultCache.put(det.label, det.trackId, crop, r)
-                val savedAs = withContext(Dispatchers.IO) {
+                val saved = withContext(Dispatchers.IO) {
                     try {
                         FeedbackSaver.saveIfNeeded(this@MainActivity, frame, det, r)
                     } catch (e: Exception) {
@@ -560,13 +560,16 @@ class MainActivity : AppCompatActivity() {
                         null
                     }
                 }
+                // 동의했고 서버도 오탐으로 판정했으면 원본 화면을 서버로 (인터넷이 없으면 나중에)
+                val uploading = saved != null && FrameUploader.enqueueIfAllowed(this@MainActivity, r, saved)
                 val entry = withContext(Dispatchers.IO) {
                     HistoryStore.add(this@MainActivity, source, det.label, r, crop)
                 }
                 if (myReq != requestSeq) return@launch
 
-                val msg = if (savedAs != null)
-                    "탐지 결과(${WasteClasses.koName(det.label)})와 AI 판단(${WasteClasses.koName(savedAs)})이 달라 학습 자료로 저장했어요." else null
+                val msg = if (saved != null)
+                    "탐지 결과(${WasteClasses.koName(det.label)})와 AI 판단(${WasteClasses.koName(saved.geminiClass)})이 달라 학습 자료로 저장했어요." +
+                        (if (uploading) " 서버로도 보낼게요." else "") else null
                 resultCard.showGuide(r, crop, det.classId, status = "AI 안내", message = msg, historyId = entry.id)
             } catch (e: CancellationException) {
                 throw e

@@ -16,8 +16,11 @@ import java.util.Locale
  */
 object FeedbackSaver {
 
-    /** 저장했으면 Gemini가 판단한 분류 이름, 저장하지 않았으면 null */
-    fun saveIfNeeded(context: Context, frame: Bitmap, det: Detection, r: DisposalResponse): String? {
+    /** 저장 결과: AI 분류, 원본 화면 파일, 박스(0~1, 중심x·중심y·너비·높이) */
+    data class Saved(val geminiClass: String, val imageFile: File, val box: DoubleArray)
+
+    /** 저장했으면 Saved, 저장하지 않았으면 null */
+    fun saveIfNeeded(context: Context, frame: Bitmap, det: Detection, r: DisposalResponse): Saved? {
         // 허용된 값(7개 분류 + other)만 사용. 그 외 값은 저장하지 않음
         val geminiClass = WasteClasses.normalize(r.yoloClass) ?: return null
         val disagree = geminiClass != det.label
@@ -38,7 +41,8 @@ object FeedbackSaver {
         val bh = b.height() / h
 
         // 1) 화면 전체 사진
-        File(dir, "$name.jpg").outputStream().use {
+        val imageFile = File(dir, "$name.jpg")
+        imageFile.outputStream().use {
             frame.compress(Bitmap.CompressFormat.JPEG, 92, it)
         }
 
@@ -64,6 +68,6 @@ object FeedbackSaver {
         }
         File(dir, "$name.json").writeText(meta.toString(2))
 
-        return geminiClass
+        return Saved(geminiClass, imageFile, doubleArrayOf(cx, cy, bw, bh))
     }
 }

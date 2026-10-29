@@ -42,7 +42,9 @@ class FeedbackDialogs(
                 builder.setMessage(
                     "아직 수집된 사례가 없어요.\n\n" +
                             "YOLO 탐지 결과와 AI 판단이 다를 때 자동으로 모여요."
-                ).setPositiveButton("닫기", null).show()
+                ).setPositiveButton("닫기", null)
+                    .setNeutralButton("서버로 보내기 설정") { _, _ -> showUploadConsent() }
+                    .show()
                 return@launch
             }
 
@@ -68,13 +70,36 @@ class FeedbackDialogs(
     }
 
     private fun showMore(s: FeedbackManager.Stats) {
+        val upload = if (FrameUploader.isConsented(activity)) "켜짐" else "꺼짐"
         MaterialAlertDialogBuilder(activity)
             .setTitle("학습 데이터")
-            .setItems(arrayOf("ZIP으로 내보내기 (확정 ${s.accepted}개)", "모두 비우기")) { _, which ->
+            .setItems(arrayOf("ZIP으로 내보내기 (확정 ${s.accepted}개)", "모두 비우기", "서버로 보내기: $upload")) { _, which ->
                 when (which) {
                     0 -> exportFeedback()
                     1 -> confirmClear(afterExport = false)
+                    2 -> showUploadConsent()
                 }
+            }
+            .setNegativeButton("닫기", null)
+            .show()
+    }
+
+    /** 오탐 원본 화면을 서버로 보낼지 묻기 (기본값: 꺼짐) */
+    fun showUploadConsent() {
+        val on = FrameUploader.isConsented(activity)
+        MaterialAlertDialogBuilder(activity)
+            .setTitle("학습 자료 서버로 보내기")
+            .setMessage(
+                "탐지 결과와 AI 판단이 다를 때, 그 순간의 카메라 화면 전체와 박스 위치를 서버로 보내요. " +
+                    "모인 자료는 관리자가 검토한 뒤 탐지 모델을 다시 학습시키는 데만 써요.\n\n" +
+                    "· 화면에 사람 얼굴이나 개인정보가 찍힐 수 있으니 주의해 주세요\n" +
+                    "· 보낸 사진은 90일이 지나면 서버에서 지워져요\n" +
+                    "· 언제든 여기서 끌 수 있고, 끄면 아직 안 보낸 것도 취소돼요\n\n" +
+                    "지금: " + (if (on) "켜짐" else "꺼짐")
+            )
+            .setPositiveButton(if (on) "끄기" else "동의하고 켜기") { _, _ ->
+                FrameUploader.setConsented(activity, !on)
+                Toast.makeText(activity, if (on) "서버로 보내기를 껐어요" else "서버로 보내기를 켰어요", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("닫기", null)
             .show()

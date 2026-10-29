@@ -50,6 +50,8 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // 오탐 사진을 인터넷이 될 때 나중에라도 보내기 (앱을 꺼도 이어서)
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.appcompat)
