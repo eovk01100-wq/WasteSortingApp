@@ -1,13 +1,12 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    자동 백업 규칙 (Android 11 이하).
+    - server_auth.xml: 기기 토큰·JWT·리프레시 토큰·계정 이메일 → 백업에서 제외
+      (복원된 폰에서는 앱이 기기 토큰을 새로 받고, 로그인은 다시 한다)
+    - feedback/: 학습용으로 저장한 카메라 전체 사진 → 백업에서 제외
+    나머지(설정, 최근 기록)는 그대로 백업된다.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="sharedpref" path="server_auth.xml" />
+    <exclude domain="external" path="feedback/" />
 </full-backup-content>

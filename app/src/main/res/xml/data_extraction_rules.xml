@@ -1,19 +1,16 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    자동 백업·기기 이전 규칙 (Android 12 이상). backup_rules.xml 과 같은 내용을 유지한다.
+    - server_auth.xml: 인증 토큰과 계정 이메일 → 제외
+    - feedback/: 학습용 카메라 전체 사진 → 제외
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="sharedpref" path="server_auth.xml" />
+        <exclude domain="external" path="feedback/" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="sharedpref" path="server_auth.xml" />
+        <exclude domain="external" path="feedback/" />
     </device-transfer>
-    -->
 </data-extraction-rules>
