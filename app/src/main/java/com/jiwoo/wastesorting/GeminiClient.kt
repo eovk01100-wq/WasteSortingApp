@@ -11,13 +11,16 @@ import okhttp3.OkHttpClient
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.HttpException
+import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
+import retrofit2.http.Path
 import retrofit2.http.Query
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
@@ -40,9 +43,83 @@ interface ServerApi {
         @Header("Authorization") auth: String,
         @Query("q") query: String
     ): DisposalResponse
+
+    @POST("api/v1/auth/signup")
+    suspend fun signup(
+        @Header("Authorization") auth: String,
+        @Body body: AccountRequest
+    ): TokenResponse
+
+    /** 기기 토큰을 같이 보내면 이 기기의 익명 기록을 계정으로 옮긴다 */
+    @POST("api/v1/auth/login")
+    suspend fun login(
+        @Header("Authorization") auth: String?,
+        @Body body: AccountRequest
+    ): TokenResponse
+
+    @POST("api/v1/auth/refresh")
+    suspend fun refresh(@Body body: RefreshRequest): TokenResponse
+
+    @POST("api/v1/auth/logout")
+    suspend fun logout(@Body body: RefreshRequest): Response<Unit>
+
+    @GET("api/v1/analyses")
+    suspend fun history(
+        @Header("Authorization") auth: String,
+        @Query("page") page: Int,
+        @Query("size") size: Int
+    ): HistoryPage
+
+    @GET("api/v1/analyses/{id}")
+    suspend fun historyDetail(
+        @Header("Authorization") auth: String,
+        @Path("id") id: Long
+    ): HistoryDetail
 }
 
 data class DeviceTokenResponse(@SerializedName("token") val token: String?)
+
+data class AccountRequest(
+    @SerializedName("email") val email: String,
+    @SerializedName("password") val password: String
+)
+
+data class RefreshRequest(@SerializedName("refreshToken") val refreshToken: String)
+
+data class TokenResponse(
+    @SerializedName("accessToken") val accessToken: String?,
+    @SerializedName("refreshToken") val refreshToken: String?,
+    @SerializedName("email") val email: String?
+)
+
+/** 서버에 쌓인 내 기록 (로그인하면 다른 폰에서도 같은 기록) */
+data class HistoryPage(
+    @SerializedName("content") val content: List<HistorySummary>?,
+    @SerializedName("totalElements") val totalElements: Long = 0
+)
+
+data class HistorySummary(
+    @SerializedName("id") val id: Long,
+    @SerializedName("source") val source: String?,
+    @SerializedName("itemName") val itemName: String?,
+    @SerializedName("category") val category: String?,
+    @SerializedName("query") val query: String?,
+    @SerializedName("detectedLabel") val detectedLabel: String?,
+    @SerializedName("createdAt") val createdAt: String?
+)
+
+data class HistoryDetail(
+    @SerializedName("id") val id: Long,
+    @SerializedName("itemName") val itemName: String?,
+    @SerializedName("category") val category: String?,
+    @SerializedName("steps") val steps: List<String>?,
+    @SerializedName("caution") val caution: String?,
+    @SerializedName("note") val note: String?,
+    @SerializedName("yoloClass") val yoloClass: String?,
+    @SerializedName("createdAt") val createdAt: String?
+) {
+    fun toResponse() = DisposalResponse(itemName, category, steps, caution, note, yoloClass)
+}
 
 /** 서버가 보낸 오류 { code, message }. message는 사용자에게 그대로 보여 줘도 되는 한국어 */
 class ServerException(val status: Int, val code: String?, message: String) : Exception(message)
@@ -55,6 +132,9 @@ object GeminiClient {
 
     private const val PREFS = "server_auth"
     private const val KEY_TOKEN = "device_token"
+    private const val KEY_ACCESS = "access_token"
+    private const val KEY_REFRESH = "refresh_token"
+    private const val KEY_EMAIL = "account_email"
 
     private val gson = Gson()
     private var prefs: SharedPreferences? = null
@@ -97,39 +177,106 @@ object GeminiClient {
 
     /** 사진 없이 물건 이름으로 검색 */
     suspend fun askText(query: String): DisposalResponse =
-        withToken { auth -> api.search(auth, query) }
+        GeminiParser.sanitize(withAuth { auth -> api.search(auth, query) })
 
     private suspend fun analyze(bitmap: Bitmap, metaJson: String): DisposalResponse {
         val jpeg = toJpegBytes(bitmap)
-        return withToken { auth ->
+        return GeminiParser.sanitize(withAuth { auth ->
             // 다시 시도할 때 같은 본문을 쓸 수 있게 매번 새로 만든다
             val image = MultipartBody.Part.createFormData(
                 "image", "photo.jpg", jpeg.toRequestBody("image/jpeg".toMediaType())
             )
             val meta = metaJson.toRequestBody("text/plain; charset=utf-8".toMediaType())
             api.analyze(auth, image, meta)
-        }
+        })
     }
+
+    // ---------------- 계정 (선택 로그인) ----------------
+
+    val isLoggedIn: Boolean get() = prefs?.getString(KEY_ACCESS, null) != null
+    val email: String? get() = prefs?.getString(KEY_EMAIL, null)
+
+    /** 가입: 지금 이 기기의 익명 기록이 그대로 계정 기록이 된다 */
+    suspend fun signup(email: String, password: String) = call {
+        saveAccount(api.signup("Bearer " + deviceToken(), AccountRequest(email.trim(), password)))
+    }
+
+    /** 로그인: 이 기기에서 쌓은 익명 기록도 계정으로 옮긴다 */
+    suspend fun login(email: String, password: String) = call {
+        val device = prefs?.getString(KEY_TOKEN, null)?.let { "Bearer $it" }
+        saveAccount(api.login(device, AccountRequest(email.trim(), password)))
+    }
+
+    /** 로그아웃: 서버의 리프레시 토큰을 지우고, 이후 요청은 다시 기기 토큰으로 */
+    suspend fun logout() {
+        prefs?.getString(KEY_REFRESH, null)?.let { r ->
+            try { api.logout(RefreshRequest(r)) } catch (_: Exception) { /* 오프라인이어도 로컬 로그아웃은 진행 */ }
+        }
+        clearAccount()
+    }
+
+    /** 서버에 쌓인 내 기록 (최신순) */
+    suspend fun history(page: Int = 0, size: Int = 30): HistoryPage = withAuth { auth -> api.history(auth, page, size) }
+
+    suspend fun historyDetail(id: Long): HistoryDetail = withAuth { auth -> api.historyDetail(auth, id) }
+
+    private fun saveAccount(t: TokenResponse) {
+        require(!t.accessToken.isNullOrBlank() && !t.refreshToken.isNullOrBlank()) { "서버에서 토큰을 받지 못했어요" }
+        prefs?.edit()
+            ?.putString(KEY_ACCESS, t.accessToken)
+            ?.putString(KEY_REFRESH, t.refreshToken)
+            ?.putString(KEY_EMAIL, t.email)
+            ?.apply()
+    }
+
+    private fun clearAccount() {
+        prefs?.edit()?.remove(KEY_ACCESS)?.remove(KEY_REFRESH)?.remove(KEY_EMAIL)?.apply()
+    }
+
+    /** 서버 오류를 사용자에게 보여 줄 문장이 담긴 ServerException으로 바꿔서 던진다 */
+    private suspend fun <T> call(block: suspend () -> T): T = try {
+        block()
+    } catch (e: HttpException) {
+        throw toServerException(e)
+    }
+
+    // ---------------- 인증 ----------------
+
+    /** 로그인했으면 액세스 토큰(JWT), 아니면 기기 토큰 */
+    private suspend fun currentAuth(): String =
+        "Bearer " + (prefs?.getString(KEY_ACCESS, null) ?: deviceToken())
 
     /**
-     * 저장된 토큰으로 요청. 토큰이 없으면 먼저 받고,
-     * 서버가 401(토큰 무효)을 주면 토큰을 새로 받아 한 번만 다시 시도한다.
+     * 인증을 붙여 요청하고, 401이면 한 번만 복구한 뒤 다시 시도한다.
+     * - 로그인 상태: 리프레시 토큰으로 새 토큰을 받는다. 실패하면 로그아웃 처리하고 기기 토큰으로
+     * - 익명 상태: 기기 토큰을 새로 받는다
      */
-    private suspend fun withToken(call: suspend (String) -> DisposalResponse): DisposalResponse {
+    private suspend fun <T> withAuth(request: suspend (String) -> T): T {
         try {
-            return GeminiParser.sanitize(call("Bearer " + token()))
+            return request(currentAuth())
         } catch (e: HttpException) {
             if (e.code() != 401) throw toServerException(e)
-            clearToken()
+            recoverAuth()
         }
-        try {
-            return GeminiParser.sanitize(call("Bearer " + token()))
-        } catch (e: HttpException) {
-            throw toServerException(e)
-        }
+        return call { request(currentAuth()) }
     }
 
-    private suspend fun token(): String {
+    private suspend fun recoverAuth() {
+        val refresh = prefs?.getString(KEY_REFRESH, null)
+        if (prefs?.getString(KEY_ACCESS, null) != null && refresh != null) {
+            try {
+                val t = api.refresh(RefreshRequest(refresh))
+                saveAccount(t.copy(email = t.email ?: email))
+                return
+            } catch (_: Exception) {
+                clearAccount()   // 리프레시도 만료 → 로그아웃 상태로 (기록은 서버에 남아 있음)
+                return
+            }
+        }
+        clearToken()
+    }
+
+    private suspend fun deviceToken(): String {
         prefs?.getString(KEY_TOKEN, null)?.let { return it }
         val issued = try {
             api.issueDeviceToken().token

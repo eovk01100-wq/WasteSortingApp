@@ -22,7 +22,8 @@ import java.util.Locale
 /** 최근 기록 창: 목록, 별표 빼고 비우기. 항목을 누르면 onOpen을 부른다 */
 class HistoryDialog(
     private val activity: AppCompatActivity,
-    private val onOpen: (HistoryEntry) -> Unit
+    private val onOpen: (HistoryEntry) -> Unit,
+    private val onAccount: () -> Unit
 ) {
 
     fun show() {
@@ -32,7 +33,8 @@ class HistoryDialog(
                 MaterialAlertDialogBuilder(activity)
                     .setTitle("최근 기록")
                     .setMessage("아직 기록이 없어요.\nAI 안내를 받으면 자동으로 저장돼요.")
-                    .setPositiveButton("닫기", null)
+                    .setPositiveButton("계정 기록") { _, _ -> onAccount() }
+                    .setNegativeButton("닫기", null)
                     .show()
                 return@launch
             }
@@ -64,6 +66,7 @@ class HistoryDialog(
                 .setTitle("최근 기록")
                 .setAdapter(adapter) { _, which -> onOpen(items[which]) }
                 .setNeutralButton("별표 빼고 비우기") { _, _ -> confirmClear() }
+                .setPositiveButton("계정 기록") { _, _ -> onAccount() }
                 .setNegativeButton("닫기", null)
                 .show()
         }

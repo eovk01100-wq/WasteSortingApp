@@ -137,7 +137,11 @@ class MainActivity : AppCompatActivity() {
 
     // 최근 기록 창 (항목을 누르면 결과 카드로 열기)
     private val historyDialog: HistoryDialog by lazy {
-        HistoryDialog(this) { e -> openHistory(e) }
+        HistoryDialog(this, onOpen = { e -> openHistory(e) }, onAccount = { accountDialog.showServerHistoryOrAccount() })
+    }
+
+    private val accountDialog: AccountDialog by lazy {
+        AccountDialog(this) { d -> openServerHistory(d) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -669,6 +673,14 @@ class MainActivity : AppCompatActivity() {
             status = "기록 · ${HistoryDialog.formatTime(e.time)}",
             historyId = e.id
         )
+    }
+
+    /** 서버(계정) 기록 하나 보기. 사진은 서버에 저장하지 않으므로 이미지 없이 보여 준다 */
+    private fun openServerHistory(d: HistoryDetail) {
+        if (requesting) return
+        hintText.visibility = View.GONE
+        if (!photoMode) overlayView.setResults(emptyList(), 1, 1)
+        resultCard.showGuide(d.toResponse(), null, -1, status = "계정 기록 · ${AccountDialog.shortTime(d.createdAt)}")
     }
 
     // ---------------- 텍스트 검색 ----------------
