@@ -16,6 +16,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.HTTP
 import retrofit2.http.Header
 import retrofit2.http.Multipart
 import retrofit2.http.POST
@@ -53,6 +54,13 @@ interface ServerApi {
         @Part image: MultipartBody.Part,
         @Part("meta") meta: RequestBody
     ): FrameUploadResponse
+
+    /** 탈퇴: 계정·기록·오탐 사진 모두 삭제 (이메일 계정은 비밀번호 필요) */
+    @HTTP(method = "DELETE", path = "api/v1/users/me", hasBody = true)
+    suspend fun deleteMe(
+        @Header("Authorization") auth: String,
+        @Body body: DeleteRequest
+    ): Response<Unit>
 
     @POST("api/v1/auth/signup")
     suspend fun signup(
@@ -97,6 +105,8 @@ data class AccountRequest(
 )
 
 data class RefreshRequest(@SerializedName("refreshToken") val refreshToken: String)
+
+data class DeleteRequest(@SerializedName("password") val password: String?)
 
 data class TokenResponse(
     @SerializedName("accessToken") val accessToken: String?,
@@ -220,8 +230,16 @@ object GeminiClient {
     val email: String? get() = prefs?.getString(KEY_EMAIL, null)
 
     /** 가입: 지금 이 기기의 익명 기록이 그대로 계정 기록이 된다 */
-    suspend fun signup(email: String, password: String) = call {
-        saveAccount(api.signup("Bearer " + deviceToken(), AccountRequest(email.trim(), password)))
+    suspend fun signup(email: String, password: String) {
+        val req = AccountRequest(email.trim(), password)
+        try {
+            call { saveAccount(api.signup("Bearer " + deviceToken(), req)) }
+        } catch (e: ServerException) {
+            // 이 폰의 기기 토큰이 이미 다른 계정이 된 경우(예: 예전 버전에서 로그아웃): 새 익명 토큰으로 한 번 더
+            if (e.code != "ALREADY_REGISTERED") throw e
+            clearToken()
+            call { saveAccount(api.signup("Bearer " + deviceToken(), req)) }
+        }
     }
 
     /** 로그인: 이 기기에서 쌓은 익명 기록도 계정으로 옮긴다 */
@@ -230,12 +248,27 @@ object GeminiClient {
         saveAccount(api.login(device, AccountRequest(email.trim(), password)))
     }
 
-    /** 로그아웃: 서버의 리프레시 토큰을 지우고, 이후 요청은 다시 기기 토큰으로 */
+    /**
+     * 로그아웃: 서버의 리프레시 토큰을 지우고, 이 폰의 기기 토큰도 버린다.
+     * 가입하면 그 기기 토큰의 사용자가 그대로 계정이 되므로, 남겨 두면 로그아웃 후에도 계정으로 동작한다.
+     * 다음 요청 때 새 익명 토큰을 받는다.
+     */
     suspend fun logout() {
         prefs?.getString(KEY_REFRESH, null)?.let { r ->
             try { api.logout(RefreshRequest(r)) } catch (_: Exception) { /* 오프라인이어도 로컬 로그아웃은 진행 */ }
         }
         clearAccount()
+        clearToken()
+    }
+
+    /** 탈퇴: 서버의 계정과 기록을 지우고, 이 폰의 토큰도 지운다 (폰 안의 최근 기록·학습 자료는 남음) */
+    suspend fun deleteAccount(password: String?) {
+        withAuth { auth ->
+            val r = api.deleteMe(auth, DeleteRequest(password))
+            if (!r.isSuccessful) throw HttpException(r)
+        }
+        clearAccount()
+        clearToken()
     }
 
     /** 서버에 쌓인 내 기록 (최신순) */

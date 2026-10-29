@@ -36,10 +36,14 @@ class AccountDialog(
     fun showAccount() {
         if (GeminiClient.isLoggedIn) {
             MaterialAlertDialogBuilder(activity)
-                .setTitle("내 계정")
-                .setMessage("${GeminiClient.email ?: "로그인됨"}\n\n이 계정으로 로그인한 폰에서 같은 기록을 볼 수 있어요.")
-                .setPositiveButton("계정 기록") { _, _ -> showServerHistory() }
-                .setNeutralButton("로그아웃") { _, _ -> logout() }
+                .setTitle("내 계정 · ${GeminiClient.email ?: "로그인됨"}")
+                .setItems(arrayOf("계정 기록 보기", "로그아웃", "계정 삭제")) { _, which ->
+                    when (which) {
+                        0 -> showServerHistory()
+                        1 -> logout()
+                        2 -> confirmDelete()
+                    }
+                }
                 .setNegativeButton("닫기", null)
                 .show()
             return
@@ -107,6 +111,47 @@ class AccountDialog(
         activity.lifecycleScope.launch {
             withContext(Dispatchers.IO) { GeminiClient.logout() }
             toast("로그아웃했어요. 계정 기록은 서버에 그대로 남아 있어요")
+        }
+    }
+
+    /** 탈퇴: 되돌릴 수 없으니 비밀번호를 한 번 더 받는다 */
+    private fun confirmDelete() {
+        val password = EditText(activity).apply {
+            hint = "비밀번호"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            isSingleLine = true
+        }
+        val box = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(password)
+        }
+        MaterialAlertDialogBuilder(activity)
+            .setTitle("계정 삭제")
+            .setMessage(
+                "서버에 있는 계정, 분석 기록, 보낸 학습 사진이 모두 지워지고 되돌릴 수 없어요.\n" +
+                    "이 폰 안의 최근 기록과 별표는 남아요.\n\n계속하려면 비밀번호를 입력해 주세요."
+            )
+            .setView(box)
+            .setPositiveButton("삭제") { _, _ -> deleteAccount(password.text.toString()) }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
+    private fun deleteAccount(password: String) {
+        if (password.isBlank()) {
+            toast("비밀번호를 입력해 주세요")
+            return
+        }
+        activity.lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) { GeminiClient.deleteAccount(password) }
+                toast("계정을 삭제했어요")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                toast(errorText(e))
+            }
         }
     }
 
