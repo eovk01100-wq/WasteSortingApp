@@ -1,9 +1,13 @@
 # 버림가이드 (WasteSortingApp)
 
-카메라로 쓰레기를 비추면 **온디바이스 YOLO11**이 물체를 찾고, 누른 물체를 **Gemini API**로 분석해
+카메라로 쓰레기를 비추면 **온디바이스 YOLO11**이 물체를 찾고, 누른 물체를 **서버를 거쳐 Gemini API**로 분석해
 **한국 기준 분리배출 방법**을 단계별로 알려 주는 Android 앱입니다.
 인터넷이 없어도 기본 안내가 나오고, AI와 탐지 모델의 판단이 다른 사례는 모아 두었다가
 사람이 검토한 뒤 재학습용 데이터로 내보낼 수 있습니다.
+
+> **백엔드 서버**: [WasteSortingServer](https://github.com/eovk01100-wq/WasteSortingServer) (Spring Boot · MySQL · AWS)
+> — Gemini 호출, 계정·분석 기록, 오탐 사진 수집·검수를 담당합니다.
+> API 문서: [Swagger UI](https://buriimguide-jiwoo.duckdns.org/swagger-ui/index.html)
 
 | 실시간 탐지 | AI 안내 결과 | 텍스트 검색 |
 |:---:|:---:|:---:|
@@ -35,7 +39,7 @@ flowchart LR
     E -->|있음| H[결과 카드]
     E -->|없음| F{인터넷?}
     F -->|없음| G[오프라인 기본 안내]
-    F -->|있음| I[Gemini API<br/>사진 + 탐지 결과]
+    F -->|있음| I[버림가이드 서버 → Gemini API<br/>사진 + 탐지 결과]
     I --> J[응답 검증·정리]
     J --> H
     G --> H
@@ -50,7 +54,7 @@ flowchart LR
 | 언어 · UI | Kotlin, XML Views, Material 3 |
 | 카메라 | CameraX 1.4 (Preview + ImageAnalysis) |
 | 탐지 모델 | YOLO11n → TFLite(LiteRT 1.0.1), GPU Delegate |
-| AI 안내 | Gemini API (`gemini-3.1-flash-lite`), Retrofit 2.11 + Gson |
+| AI 안내 | 자체 서버 경유 Gemini API (`gemini-3.1-flash-lite`), Retrofit 2.11 + Gson |
 | 비동기 | Kotlin Coroutines (요청 취소 · 늦은 결과 무시 처리) |
 | 테스트 | JUnit 4 단위 테스트 46개 |
 
@@ -121,15 +125,17 @@ app/src/main/java/com/jiwoo/wastesorting/
 ## 실행 방법
 
 1. Android Studio에서 프로젝트 열기 (minSdk 24)
-2. `local.properties`에 Gemini API 키 추가 (Git에 올리지 않음)
+2. `local.properties`에 서버 주소 추가 (Git에 올리지 않음)
    ```
-   GEMINI_API_KEY=발급받은_키
+   SERVER_URL=https://buriimguide-jiwoo.duckdns.org/
    ```
+   직접 띄운 서버를 쓰려면 그 주소를 넣습니다. 서버 실행 방법은 [WasteSortingServer](https://github.com/eovk01100-wq/WasteSortingServer) 참고
 3. 실제 기기를 연결하고 실행
 
 ## 주의
 
-- API 키가 앱 안에 들어가는 구조라 **개인 테스트용**입니다. 공개 배포 전에는 서버를 거쳐 호출하도록 바꿔야 합니다.
+- Gemini API 키는 앱에 없고 **서버에만** 있습니다. 앱은 서버가 발급한 토큰으로 요청합니다.
+- 오탐 사진의 서버 전송은 기본으로 꺼져 있고, 사용자가 동의해야 켜집니다.
 - 분리배출 안내는 AI가 만들기 때문에 지역 규정과 다를 수 있습니다.
 
 ## 라이선스 · 출처

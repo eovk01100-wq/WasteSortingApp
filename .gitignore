@@ -29,3 +29,7 @@ local.properties
 *.pem
 *.p12
 secrets.properties
+
+# 환경 변수 파일
+.env
+*.env
