@@ -147,6 +147,11 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         GeminiClient.init(this)
+        // 15일 지난 검토 대기·제외 학습 사진 정리 (확정 사례는 남김)
+        lifecycleScope.launch(Dispatchers.IO) {
+            val n = FeedbackManager.cleanupOld(applicationContext)
+            if (n > 0) Log.i(TAG, "오래된 학습 자료 정리: 파일 ${n}개")
+        }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)

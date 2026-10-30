@@ -55,7 +55,9 @@ class FeedbackDialogs(
                         "· 정답 확정: ${s.accepted}개 (ZIP에 들어감)\n" +
                         "· 제외: ${s.excluded}개\n\n" +
                         "AI 판단도 틀릴 수 있어서, 검토해서 정답을 확정한 사례만 내보내요.\n" +
-                        "사진에 개인정보가 찍혀 있으면 '제외'를 눌러 주세요."
+                        "사진에 개인정보가 찍혀 있으면 '제외'를 눌러 주세요.\n\n" +
+                        "검토 대기·제외 사례는 ${FeedbackManager.KEEP_DAYS}일이 지나면 자동으로 지워져요. " +
+                        "정답 확정 사례는 직접 비울 때까지 남아요."
             )
             if (s.pending > 0) {
                 builder.setPositiveButton("검토하기 (${s.pending})") { _, _ -> startReview() }

@@ -17,6 +17,9 @@ object FeedbackManager {
     const val REVIEW_ACCEPTED = "accepted"
     const val REVIEW_EXCLUDED = "excluded"
 
+    /** 검토 대기·제외 사례를 폰에 남겨 두는 기간. 확정 사례는 자동 삭제하지 않음 */
+    const val KEEP_DAYS = 15
+
     data class Stats(
         val total: Int,
         val labeled: Int,
@@ -188,6 +191,37 @@ object FeedbackManager {
         if (parts.size != 5) return null
         return parts.drop(1).mapNotNull { it.toDoubleOrNull() }
             .takeIf { it.size == 4 }?.toDoubleArray()
+    }
+
+    /**
+     * 자동 정리 대상인지 판단한다 (테스트용으로 분리).
+     * 확정(accepted) 사례는 재학습 데이터라 남기고, 검토 대기·제외는 KEEP_DAYS가 지나면 지운다.
+     */
+    fun shouldAutoDelete(savedAtMs: Long, review: String, nowMs: Long): Boolean {
+        if (review == REVIEW_ACCEPTED) return false
+        return nowMs - savedAtMs > KEEP_DAYS * 24L * 60 * 60 * 1000
+    }
+
+    /**
+     * 15일 지난 검토 대기·제외 사례(사진·라벨·기록)를 삭제. 지운 파일 수를 돌려줌.
+     * 저장 시각은 사진 파일 시각을 쓴다 (json은 검토할 때 다시 써져서 시각이 바뀜).
+     * 앱 시작 때 백그라운드에서 호출
+     */
+    fun cleanupOld(context: Context, nowMs: Long = System.currentTimeMillis()): Int {
+        val dir = feedbackDir(context)
+        var count = 0
+        dir.listFiles().orEmpty().filter { it.extension == "json" }.forEach { json ->
+            val base = json.nameWithoutExtension
+            val jpg = File(dir, "$base.jpg")
+            val savedAt = if (jpg.exists()) jpg.lastModified() else json.lastModified()
+            // 읽을 수 없는 기록은 검토 대기로 보고 기간이 지나면 정리
+            val review = readJson(json)?.optString("review", "") ?: ""
+            if (!shouldAutoDelete(savedAt, review, nowMs)) return@forEach
+            listOf("jpg", "txt", "json").forEach { ext ->
+                if (File(dir, "$base.$ext").delete()) count++
+            }
+        }
+        return count
     }
 
     /** 검토를 마친 사례(확정·제외)만 삭제. 검토 대기는 남김 */
