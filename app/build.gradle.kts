@@ -30,14 +30,29 @@ android {
         )
     }
 
+    // 정식 서명 키. 경로와 비밀번호는 local.properties에만 둔다 (Git에 올리지 않음)
+    // 값이 없으면 release는 서명 없이 만들어진다 (CI 등)
+    val releaseStoreFile = localProps.getProperty("RELEASE_STORE_FILE")
+    signingConfigs {
+        if (releaseStoreFile != null) {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = localProps.getProperty("RELEASE_STORE_PASSWORD")
+                keyAlias = localProps.getProperty("RELEASE_KEY_ALIAS")
+                keyPassword = localProps.getProperty("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             // R8: 안 쓰는 코드 제거 + 이름 줄이기. 지켜야 할 규칙은 src/main/keepRules/rules.keep
             optimization {
                 enable = true
             }
-            // 임시: 정식 서명 키를 만들기 전까지 디버그 키로 서명해 폰에서 바로 실행·확인한다
-            signingConfig = signingConfigs.getByName("debug")
+            if (releaseStoreFile != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
