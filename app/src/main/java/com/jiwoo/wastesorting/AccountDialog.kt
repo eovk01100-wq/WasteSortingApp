@@ -1,5 +1,6 @@
 package com.jiwoo.wastesorting
 
+import android.util.Log
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
@@ -215,7 +216,12 @@ class AccountDialog(
         addView(TextView(context).apply { textSize = 13f; alpha = 0.7f; maxLines = 1 })
     }
 
-    private fun errorText(e: Exception): String = when (e) {
+    private fun errorText(e: Exception): String {
+        Log.w("AccountDialog", "계정 요청 실패", e)   // 원인은 Logcat에서 확인 (tag:AccountDialog)
+        return errorMessage(e)
+    }
+
+    private fun errorMessage(e: Exception): String = when (e) {
         is ServerException -> e.message ?: "요청에 실패했어요"
         is java.net.UnknownHostException, is java.net.ConnectException -> "인터넷 연결을 확인해 주세요"
         else -> "요청에 실패했어요. 다시 시도해 주세요"

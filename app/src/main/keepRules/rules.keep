@@ -1,12 +1,21 @@
-# Add project specific R8 rules here.
-# AGP will combine all keep rule files in src/main/keepRules to pass to R8
-#
-# For more details, see
-#   https://d.android.com/r/tools/r8/keep-rules
+# 버림가이드 R8 규칙
+# R8은 클래스·필드 이름을 짧게 바꾼다. Gson은 필드 이름을 JSON 키로 쓰므로
+# Gson으로 읽고 쓰는 클래스는 이름과 필드를 그대로 지켜야 한다.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# 제네릭 타입(List<String> 등)과 어노테이션 정보 유지 (Gson·Retrofit이 읽음)
+-keepattributes Signature, *Annotation*, InnerClasses, EnclosingMethod
+
+# @SerializedName 필드가 있는 앱 클래스(서버 요청·응답 모델)는 클래스와 필드를 그대로 유지.
+# Gson만 만드는 클래스(HistoryPage 등)는 R8이 "아무도 안 만든다"고 보고 통째로 지우기 때문에
+# 조건부(-if)가 아니라 바로 지킨다
+-keepclasseswithmembers class com.jiwoo.wastesorting.** {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
+
+# 최근 기록(history.json)은 @SerializedName 없이 필드 이름 그대로 저장된다.
+# 이름이 바뀌면 기존 기록을 못 읽으므로 그대로 유지
+-keep class com.jiwoo.wastesorting.HistoryEntry { <init>(...); <fields>; }
+
+# WorkManager가 쓰는 Room(2.6.1)의 규칙은 클래스만 지키고 기본 생성자는 지키지 않는다.
+# R8 전체 모드에서는 생성자가 지워져 앱 시작 때 WorkDatabase_Impl 생성에 실패하므로 직접 지킨다
+-keep class * extends androidx.room.RoomDatabase { <init>(); }
