@@ -7,7 +7,7 @@
 
 > **백엔드 서버**: [WasteSortingServer](https://github.com/eovk01100-wq/WasteSortingServer) (Spring Boot · MySQL · AWS)
 > — Gemini 호출, 계정·분석 기록, 오탐 사진 수집·검수를 담당합니다.
-> API 문서: [Swagger UI](https://buriimguide-jiwoo.duckdns.org/swagger-ui/index.html)
+> API 목록과 화면은 서버 저장소 README에서 볼 수 있습니다.
 
 | 실시간 탐지 | AI 안내 결과 | 텍스트 검색 |
 |:---:|:---:|:---:|
@@ -127,9 +127,9 @@ app/src/main/java/com/jiwoo/wastesorting/
 1. Android Studio에서 프로젝트 열기 (minSdk 24)
 2. `local.properties`에 서버 주소 추가 (Git에 올리지 않음)
    ```
-   SERVER_URL=https://buriimguide-jiwoo.duckdns.org/
+   SERVER_URL=https://서버-주소/
    ```
-   직접 띄운 서버를 쓰려면 그 주소를 넣습니다. 서버 실행 방법은 [WasteSortingServer](https://github.com/eovk01100-wq/WasteSortingServer) 참고
+   서버는 직접 띄워서 그 주소를 넣습니다. 서버 실행 방법은 [WasteSortingServer](https://github.com/eovk01100-wq/WasteSortingServer) 참고
 3. 실제 기기를 연결하고 실행
 
 ## 주의
@@ -137,6 +137,7 @@ app/src/main/java/com/jiwoo/wastesorting/
 - Gemini API 키는 앱에 없고 **서버에만** 있습니다. 앱은 서버가 발급한 토큰으로 요청합니다.
 - 오탐 사진의 서버 전송은 기본으로 꺼져 있고, 사용자가 동의해야 켜집니다.
 - 분리배출 안내는 AI가 만들기 때문에 지역 규정과 다를 수 있습니다.
+- 처리하는 정보와 보관 기간: [개인정보처리방침](PRIVACY.md)
 
 ## 라이선스 · 출처
 
